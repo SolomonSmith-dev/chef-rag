@@ -1,0 +1,41 @@
+[project]
+name = "chef-rag"
+version = "0.1.0"
+description = "Production-grade RAG for professional culinary knowledge"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",        # OpenRouter uses OpenAI-compatible API
+    "supabase>=2.0.0",
+    "langfuse>=2.0.0",
+    "sentence-transformers>=3.0.0",   # bge-reranker-base
+    "ragas>=0.1.0",
+    "rank-bm25>=0.2.2",
+    "tiktoken>=0.7.0",
+    "rich>=13.0.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.6.0",
+    "mypy>=1.10.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
