@@ -1,5 +1,7 @@
 # chef-rag
 
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) ![Python](https://img.shields.io/badge/python-3.12+-blue.svg) ![Status](https://img.shields.io/badge/status-in%20development-orange)
+
 A production-grade RAG system for professional culinary knowledge. Answers questions about cooking techniques, knife skills, kitchen management, food safety, and BOH operations from a curated expert corpus.
 
 Built with hybrid retrieval (BM25 + dense vectors), cross-encoder reranking, a swappable model layer, and a full eval harness. Traced end-to-end with Langfuse.
