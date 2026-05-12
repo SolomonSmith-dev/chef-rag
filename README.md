@@ -4,8 +4,6 @@ A production-grade RAG system for professional culinary knowledge. Answers quest
 
 Built with hybrid retrieval (BM25 + dense vectors), cross-encoder reranking, a swappable model layer, and a full eval harness. Traced end-to-end with Langfuse.
 
-**Live demo:** _coming Week 5_
-
 ---
 
 ## Why this domain
@@ -114,15 +112,7 @@ chef-rag/
 
 ## Roadmap
 
-- [x] Design doc + repo scaffold (Week 1)
-- [ ] Ingestion pipeline: chunking + embedding (Week 3)
-- [ ] Hybrid retrieval CLI: `chef-rag query "..."` (Week 3)
-- [ ] Generation layer + citations (Week 4)
-- [ ] Langfuse tracing + eval harness v1 (Week 4)
-- [ ] Modal serverless deployment (Week 4)
-- [ ] Chat UI on Astro (Week 5)
-- [ ] Eval iteration: improve scores ≥10% from baseline (Week 5)
-- [ ] Fine-tuned model variant (Week 10)
+See [ROADMAP.md](./ROADMAP.md) for what's built, what's next, and stretch targets.
 
 ---
 
@@ -146,9 +136,7 @@ uv run python evals/run_evals.py
 
 ## Eval results
 
-| Version | Faithfulness | Answer Relevancy | Context Precision | Date |
-|---|---|---|---|---|
-| v1 baseline | _pending_ | _pending_ | _pending_ | Week 4 |
+Tracked in [ROADMAP.md](./ROADMAP.md) and filled in as v1 ships.
 
 ---
 
