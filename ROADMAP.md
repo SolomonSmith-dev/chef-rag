@@ -5,6 +5,7 @@ Tracking what's built, what's next, and stretch targets.
 ## Done
 
 - [x] Design doc + repo scaffold
+- [x] Foundation: `docs/design.md`, golden evals, `src/` package scaffold, CI
 
 ## In progress
 
