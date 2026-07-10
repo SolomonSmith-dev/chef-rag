@@ -31,4 +31,4 @@ def test_settings_requires_openrouter_key(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
 
     with pytest.raises(ValidationError):
-        Settings()
+        Settings(_env_file=None)
