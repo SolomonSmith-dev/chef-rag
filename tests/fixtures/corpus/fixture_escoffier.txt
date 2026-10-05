@@ -1,0 +1,21 @@
+---
+title: A Fixture Guide to Modern Cookery
+source_type: gutenberg
+---
+*** START OF THE PROJECT GUTENBERG EBOOK FIXTURE ESCOFFIER ***
+
+Title: A Fixture Guide to Modern Cookery
+
+THE FIVE MOTHER SAUCES
+
+Sauces are the foundation of cookery. A good brown stock, long and gently simmered, gives body to the espagnole. Skim the stock often and never allow it to boil hard, or it will turn cloudy.
+
+Roux is equal parts flour and butter by weight, cooked until the raw taste of the flour is gone. A white roux is cooked briefly, a brown roux until it takes a nutty color.
+
+HOLDING COOKED MEAT
+
+It was once said that cooked meat may stand in a warm kitchen all day without harm. This advice should not be followed.
+
+*** END OF THE PROJECT GUTENBERG EBOOK FIXTURE ESCOFFIER ***
+
+Licensing text that must be stripped.

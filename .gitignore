@@ -16,7 +16,10 @@ build/
 !.env.example
 
 # Data (large files stay local)
-data/raw/
+data/raw/*
+!data/raw/original/
+data/raw/original/*
+!data/raw/original/README.md
 data/processed/
 *.pkl
 *.h5

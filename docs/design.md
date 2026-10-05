@@ -30,7 +30,7 @@ create table documents (
   id uuid primary key default gen_random_uuid(),
   source_path text not null unique,
   title text,
-  source_type text not null,  -- gutenberg | usda | original | other
+  source_type text not null,  -- gutenberg | fda | usda | original | other
   ingested_at timestamptz not null default now()
 );
 ```
