@@ -17,11 +17,39 @@ def test_cli_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert "chef-rag" in captured.out
 
 
-def test_cli_query_not_implemented(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["query", "how do I hold a chef knife"])
-    captured = capsys.readouterr()
-    assert exit_code == 1
-    assert "not implemented" in captured.err
+def test_cli_query_without_index_errors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("INDEX_DIR", str(tmp_path / "missing"))
+    exit_code = main(["query", "knife", "--embedder", "hash", "--reranker", "none"])
+    assert exit_code == 2
+    assert "ingest --index" in capsys.readouterr().err
+
+
+def test_cli_ingest_index_then_query(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixtures = Path(__file__).parent / "fixtures" / "corpus"
+    out = tmp_path / "processed"
+    args = ["--source", str(fixtures), "--out", str(out), "--tokenizer", "words"]
+    assert main(["ingest", *args, "--index", "--embedder", "hash"]) == 0
+    monkeypatch.setenv("INDEX_DIR", str(out / "index"))
+    code = main(
+        [
+            "query",
+            "poultry internal temperature",
+            "--embedder",
+            "hash",
+            "--reranker",
+            "none",
+            "--show-scores",
+            "--k",
+            "2",
+        ]
+    )
+    out_text = capsys.readouterr().out
+    assert code == 0
+    assert "rrf=" in out_text and "fixture-fda-foodcode" in out_text
 
 
 def test_cli_ingest_fixture_corpus(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

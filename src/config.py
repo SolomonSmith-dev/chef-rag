@@ -26,3 +26,24 @@ class Settings(BaseSettings):
 def load_settings() -> Settings:
     """Load settings from the environment."""
     return Settings()
+
+
+class RetrievalSettings(BaseSettings):
+    """Retrieval knobs. No secrets, so the local backend runs without any API keys."""
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    backend: str = Field(default="local", validation_alias="RETRIEVAL_BACKEND")
+    local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # Must match the model above and the vector(N) column in supabase/migrations.
+    # all-MiniLM-L6-v2 is 384; docs/design.md used 1536 for text-embedding-3-small.
+    embedding_dim: int = 384
+    rerank_model: str = "BAAI/bge-reranker-base"
+    index_dir: str = "data/processed/index"
+    chunks_path: str = "data/processed/chunks.jsonl"
+    fuse_top_n: int = 10
+    final_top_k: int = 5
+
+
+def load_retrieval_settings() -> RetrievalSettings:
+    return RetrievalSettings()

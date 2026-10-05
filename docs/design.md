@@ -59,6 +59,24 @@ create index chunks_embedding_idx on chunks
 create index chunks_content_tsv_idx on chunks using gin (content_tsv);
 ```
 
+### Embedding dimension and backends
+
+The schema above uses `vector(1536)` for `text-embedding-3-small`. The default local
+embedder (`sentence-transformers/all-MiniLM-L6-v2`) outputs **384** dimensions, so
+dimension is a setting (`EMBEDDING_DIM`, default 384), not a constant.
+`supabase/migrations/` is rendered from `src/schema.sql.tmpl` by
+`src.retrieval.render_migration(dim)`; re-render when the model changes. A local index
+records its dimension and refuses to load with a mismatched embedder.
+
+Deviations from the sketch above: `chunks` gains a `chunk_id text unique` column (the
+citation id), denormalized `source_path`/`title`/`source_type` (so RPC results need no
+join), and a nullable `document_id`. Dense and BM25 candidate queries are the SQL
+functions `match_chunks_dense` and `match_chunks_bm25`.
+
+`src/retrieval.py` exposes two backends behind one interface. `local` (default for CI,
+demo, offline) uses rank-bm25 and a numpy matrix. `supabase` uses the RPCs above.
+Both fuse with the same RRF code. `--mode bm25|dense` exists for ablations only.
+
 ### Hybrid retrieval (v1)
 
 RRF fusion of BM25 and dense ranks in application code (`src/retrieval.py`):
