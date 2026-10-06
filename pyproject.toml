@@ -22,6 +22,8 @@ dependencies = [
     "langchain-core<1",
     "langchain<1",
     "langchain-openai<1",
+    "fastapi>=0.142.2",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
