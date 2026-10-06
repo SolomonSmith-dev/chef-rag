@@ -64,3 +64,28 @@ def test_cli_ingest_fixture_corpus(tmp_path: Path, capsys: pytest.CaptureFixture
 
 def test_cli_ingest_missing_source(tmp_path: Path) -> None:
     assert main(["ingest", "--source", str(tmp_path / "nope")]) == 2
+
+
+def test_cli_query_emits_local_trace(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    fixtures = Path(__file__).parent / "fixtures" / "corpus"
+    out = tmp_path / "processed"
+    base = ["--source", str(fixtures), "--out", str(out), "--tokenizer", "words"]
+    assert main(["ingest", *base, "--index", "--embedder", "hash"]) == 0
+    monkeypatch.setenv("INDEX_DIR", str(out / "index"))
+    monkeypatch.setenv("TRACE_DIR", str(tmp_path / "traces"))
+    monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+    assert main(["query", "danger zone", "--embedder", "hash", "--reranker", "none"]) == 0
+    text = next((tmp_path / "traces").glob("*.jsonl")).read_text()
+    assert '"name": "query"' in text and '"name": "retrieve"' in text and '"name": "rerank"' in text
+
+
+def test_cli_answer_requires_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    fixtures = Path(__file__).parent / "fixtures" / "corpus"
+    out = tmp_path / "processed"
+    base = ["--source", str(fixtures), "--out", str(out), "--tokenizer", "words"]
+    assert main(["ingest", *base, "--index", "--embedder", "hash"]) == 0
+    monkeypatch.setenv("INDEX_DIR", str(out / "index"))
+    monkeypatch.setenv("TRACE_DIR", str(tmp_path / "traces"))
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    code = main(["query", "danger zone", "--answer", "--embedder", "hash", "--reranker", "none"])
+    assert code == 2

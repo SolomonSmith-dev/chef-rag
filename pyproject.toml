@@ -7,9 +7,9 @@ dependencies = [
     "anthropic>=0.40.0",
     "openai>=1.50.0", # OpenRouter uses OpenAI-compatible API
     "supabase>=2.0.0",
-    "langfuse>=2.0.0",
+    "langfuse>=4.0.0",
     "sentence-transformers>=3.0.0", # bge-reranker-base
-    "ragas>=0.1.0",
+    "ragas==0.3.9", # 0.4.x fails to import against langchain-community 0.4
     "rank-bm25>=0.2.2",
     "tiktoken>=0.7.0",
     "rich>=13.0.0",
@@ -18,6 +18,10 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "httpx>=0.27.0",
     "pypdf>=6.19.0",
+    "langchain-community>=0.3.27,<0.4",
+    "langchain-core<1",
+    "langchain<1",
+    "langchain-openai<1",
 ]
 
 [project.scripts]
@@ -57,3 +61,4 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
