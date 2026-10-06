@@ -1,145 +1,78 @@
 # chef-rag
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) ![Python](https://img.shields.io/badge/python-3.12+-blue.svg) ![Status](https://img.shields.io/badge/status-in%20development-orange)
+![CI](https://github.com/SolomonSmith-dev/chef-rag/actions/workflows/ci.yml/badge.svg) <!-- eval-badge:start -->
+![Eval](https://img.shields.io/badge/eval-not%20run-lightgrey)
+<!-- eval-badge:end --> ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) ![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
 
-A production-grade RAG system for professional culinary knowledge. Answers questions about cooking techniques, knife skills, kitchen management, food safety, and BOH operations from a curated expert corpus.
-
-Built with hybrid retrieval (BM25 + dense vectors), cross-encoder reranking, a swappable model layer, and a full eval harness. Traced end-to-end with Langfuse.
-
----
+A cited, refuse-when-unsure RAG system for professional kitchen knowledge: techniques, food safety, kitchen management, ratios and temperatures. Hybrid retrieval, cross-encoder rerank, citation-constrained generation, every request traced.
 
 ## Why this domain
 
 Most RAG demos use Wikipedia or PDF chatbots. This one is built on 10 years of professional kitchen knowledge that no CS applicant can replicate -- from line cook to Head Chef. The domain is the differentiator; the engineering is the argument.
 
----
+## Demo
+
+Live demo: _placeholder, deploy with [docs/deploy-hf.md](docs/deploy-hf.md)_ (Hugging Face Space, local backend, rate limited, daily token cap).
+
+## Results
+
+Ablation on the golden set (`evals/golden.jsonl`, 68 questions): BM25 only, dense only, hybrid (RRF k=60), hybrid plus bge-reranker-base. Reproduce with `uv run python evals/run_evals.py` (add `--live` for the Ragas columns).
+
+<!-- ablation:start -->
+_Not yet run. The first real run needs the downloaded corpus, model weights and an OpenRouter key: see [docs/eval-runbook.md](docs/eval-runbook.md)._
+<!-- ablation:end -->
+
+Why the ablation is a four-way table: the design rule is "never dense-only", and this is the evidence for or against it. Golden questions include out-of-corpus ones that must be refused, and `outdated` ones where a 1907 text conflicts with the FDA Food Code and the right answer prefers the FDA.
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    Q[Question] --> T[Trace: Langfuse or local JSONL]
+    Q --> B[BM25: rank-bm25 or tsvector]
+    Q --> D[Dense: MiniLM numpy index or pgvector]
+    B --> R[RRF fusion, k=60, top 10]
+    D --> R
+    R --> X[Cross-encoder rerank: bge-reranker-base, top k]
+    X --> G{Strong enough?}
+    G -- no --> N[Refuse: not in my sources]
+    G -- yes --> L[OpenRouter LLM, cite chunk ids]
+    L --> V{Citations valid?}
+    V -- no --> E[Hard error]
+    V -- yes --> A[Answer + citations]
 ```
-User query
-    │
-    ▼
-Hybrid Retrieval
-    ├── BM25 (Postgres tsvector)        keyword precision
-    └── Dense vectors (pgvector)        semantic recall
-    │
-    ▼
-Cross-encoder reranker (bge-reranker-base)
-    │
-    ▼
-Generation layer (OpenRouter -- model-swappable)
-    │
-    ▼
-Response + citations
-    │
-    └── Langfuse trace (every request, cost, latency)
-```
-
----
-
-## Stack
-
-| Layer | Choice | Why |
-|---|---|---|
-| Embeddings | `text-embedding-3-small` (OpenAI) or `nomic-embed-text` (local Ollama) | Cost vs. quality tradeoff, swappable |
-| Vector store | Supabase pgvector | One DB for app data + vectors; free tier covers project |
-| Keyword search | Postgres tsvector | No extra infra; hybrid retrieval in one query |
-| Reranker | `bge-reranker-base` via HF Inference | Cheap, effective cross-encoder |
-| LLM | OpenRouter (Claude/GPT/Llama swap) | Model-agnostic generation |
-| Tracing | Langfuse (self-hosted) | Full observability: cost, latency, retrieval quality per request |
-| Serving | Modal serverless | Pay-per-request, sub-second cold start |
-| Frontend | Astro + chat island | Static site, citations as expandable cards |
-| Runtime | Python 3.12, uv | Fast installs, lockfile-first |
-
----
 
 ## Corpus
 
-**Public domain sources:**
-- Project Gutenberg culinary classics (Escoffier, Fannie Farmer, Joy of Cooking era)
-- USDA food safety and nutrition data (public domain)
-- FDA food code documents
-- NIH nutrition research (public access)
-- ServSafe study guide (public portions)
+Public domain only: Escoffier, Farmer and Beeton from Project Gutenberg, the FDA Food Code, and USDA FSIS guidance. Sources, license basis and retrieval dates are in [data/SOURCES.md](data/SOURCES.md). Your own notes go in `data/raw/original/` (format in its README) and are the only documents typed `original`.
 
-**Original content:**
-- Technique writeups from 10 years professional kitchen experience
-- Kitchen management SOPs
-- Mise en place frameworks
-- BOH communication protocols
+## What I'd do next
 
-**Scope of v1 corpus:** ~200 documents, ~50K chunks at 500 tokens with 50-token overlap
+1. Run the live baseline on the real corpus, then calibrate the refusal threshold from the gate sweep.
+2. Add the author's original notes and re-run to measure how much domain content moves faithfulness.
+3. Add a reduced-oxygen and sous vide source so modern technique questions stop being out of corpus.
 
----
-
-## Eval harness
-
-30 hand-curated golden Q&A pairs covering:
-- Technique questions ("What's the Maillard reaction and at what temperature does it occur?")
-- Safety questions ("What are the danger zone temperatures for food storage?")
-- Management questions ("How do you run a pre-shift meeting for a line of 8?")
-- Precision questions ("What is the internal temp for medium-rare beef?")
-
-Metrics: faithfulness, answer relevancy, context precision (via Ragas)
-
-**Baseline scores will be published here when v1 ships.**
-
----
-
-## Project structure
-
-```
-chef-rag/
-├── src/
-│   ├── ingest.py          # Document loading, chunking, embedding
-│   ├── retrieval.py       # Hybrid BM25 + dense retrieval
-│   ├── rerank.py          # Cross-encoder reranking
-│   ├── generate.py        # Generation with OpenRouter
-│   └── trace.py           # Langfuse instrumentation
-├── evals/
-│   ├── golden.jsonl       # 30 curated Q&A pairs
-│   └── run_evals.py       # Ragas eval runner
-├── data/
-│   ├── raw/               # Source documents
-│   └── processed/         # Chunked, ready for embedding
-├── docs/
-│   └── design.md          # Extended design decisions
-├── CLAUDE.md
-├── pyproject.toml
-└── README.md
-```
-
----
-
-## Roadmap
-
-See [ROADMAP.md](./ROADMAP.md) for what's built, what's next, and stretch targets.
-
----
-
-## Running locally
+## Setup
 
 ```bash
-# Install
-uv sync
-
-# Ingest documents
-uv run python -m src.ingest --source data/raw/
-
-# Query
-uv run python -m src.cli query "how do I hold a chef knife correctly"
-
-# Run evals
+uv sync --all-extras
+# 1. get the corpus (needs network): docs/corpus-runbook.md
+uv run python scripts/fetch_corpus.py
+# 2. chunk and index (local MiniLM embeddings)
+uv run python -m src.cli ingest --source data/raw/ --out data/processed/ --index
+# 3. query
+uv run python -m src.cli query "What temperature must poultry reach?" --backend local --show-scores
+uv run python -m src.cli query "..." --answer       # cited answer; needs OPENROUTER_API_KEY
+# 4. evals
 uv run python evals/run_evals.py
+# 5. demo locally
+uv run uvicorn --factory src.demo:build_app --port 7860
+# checks
+uv run ruff check . && uv run ruff format --check . && uv run mypy src/ && uv run pytest -q
 ```
 
----
-
-## Eval results
-
-Tracked in [ROADMAP.md](./ROADMAP.md) and filled in as v1 ships.
+Environment variables are read from the shell or `.env` (never committed): `OPENROUTER_API_KEY` (generation and live evals), `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` (traces; without them traces go to `.traces/`), `SUPABASE_URL`, `SUPABASE_KEY` (only for `--backend supabase`; schema in `supabase/migrations/`). Local retrieval, ingest and tests need no keys. See [docs/design.md](docs/design.md) for schemas and contracts and [ROADMAP.md](ROADMAP.md) for status.
 
 ---
 
-_Solomon Smith -- built May 2026_
+_Solomon Smith, built May 2026_

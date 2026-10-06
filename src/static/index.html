@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chef-rag demo</title>
+<style>
+  :root { --fg:#1b1b1b; --muted:#666; --line:#ddd; --accent:#b4441c; --bg:#fafaf7; }
+  body { font:16px/1.5 system-ui, sans-serif; color:var(--fg); background:var(--bg); margin:0; }
+  main { max-width:860px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 16px; }
+  textarea { width:100%; box-sizing:border-box; padding:10px; font:inherit; border:1px solid var(--line); border-radius:6px; }
+  button { margin-top:8px; padding:8px 16px; font:inherit; border:0; border-radius:6px; background:var(--accent); color:#fff; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  #answer { margin-top:20px; padding:12px 14px; background:#fff; border:1px solid var(--line); border-radius:6px; white-space:pre-wrap; }
+  .cite { display:inline-block; margin:0 2px; padding:0 6px; border-radius:10px; background:#f1e2da; color:var(--accent); border:0; cursor:pointer; font-size:.85em; }
+  #passage { margin-top:12px; padding:12px 14px; background:#fff; border-left:4px solid var(--accent); display:none; white-space:pre-wrap; }
+  #passage h3 { margin:0 0 6px; font-size:.95rem; }
+  table { width:100%; border-collapse:collapse; margin-top:12px; font-size:.85rem; }
+  th, td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); }
+  h2 { font-size:1.05rem; margin:24px 0 0; }
+  .notice { margin-top:16px; padding:10px 12px; background:#fff3cd; border-radius:6px; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>chef-rag</h1>
+  <p class="sub">Professional kitchen Q&amp;A, answered only from public-domain sources, with citations.</p>
+  <textarea id="q" rows="3" maxlength="500" placeholder="What temperature must poultry reach?"></textarea>
+  <button id="ask">Ask</button>
+  <div id="notice" class="notice hidden"></div>
+  <div id="answer" class="hidden"></div>
+  <div id="passage"></div>
+  <h2 id="scores-title" class="hidden">Retrieval scores</h2>
+  <table id="scores" class="hidden">
+    <thead><tr><th>#</th><th>chunk</th><th>source</th><th>rrf</th><th>bm25 rank</th><th>dense rank</th><th>rerank</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var citations = {};
+
+  function show(el, on) { el.classList.toggle("hidden", !on); }
+
+  function showPassage(id) {
+    var c = citations[id];
+    var box = $("passage");
+    box.textContent = "";
+    var h = document.createElement("h3");
+    h.textContent = c.title + " (" + c.source_type + ") " + c.chunk_id;
+    var body = document.createElement("div");
+    body.textContent = c.text;
+    box.appendChild(h);
+    box.appendChild(body);
+    box.style.display = "block";
+  }
+
+  function renderAnswer(text) {
+    var box = $("answer");
+    box.textContent = "";
+    var re = /\[cite:\s*([^\]]+)\]/g, last = 0, m, n = 0;
+    while ((m = re.exec(text)) !== null) {
+      box.appendChild(document.createTextNode(text.slice(last, m.index)));
+      m[1].split(/[,;]/).forEach(function (raw) {
+        var id = raw.trim();
+        if (!citations[id]) return;
+        var b = document.createElement("button");
+        b.className = "cite";
+        b.textContent = String(++n);
+        b.title = id;
+        b.addEventListener("click", function () { showPassage(id); });
+        box.appendChild(b);
+      });
+      last = re.lastIndex;
+    }
+    box.appendChild(document.createTextNode(text.slice(last)));
+  }
+
+  function renderScores(rows) {
+    var tbody = $("scores").querySelector("tbody");
+    tbody.textContent = "";
+    rows.forEach(function (r, i) {
+      var tr = document.createElement("tr");
+      [i + 1, r.chunk_id, r.source_type, r.rrf.toFixed(4), r.bm25_rank, r.dense_rank,
+       r.rerank === null ? "-" : r.rerank.toFixed(2)].forEach(function (v) {
+        var td = document.createElement("td");
+        td.textContent = v === null ? "-" : String(v);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    show($("scores"), rows.length > 0);
+    show($("scores-title"), rows.length > 0);
+  }
+
+  $("ask").addEventListener("click", function () {
+    var q = $("q").value.trim();
+    if (!q) return;
+    var btn = $("ask");
+    btn.disabled = true;
+    show($("notice"), false);
+    $("passage").style.display = "none";
+    fetch("/query", { method: "POST", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ question: q }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          var msg = res.body.message || "Request failed.";
+          $("notice").textContent = msg;
+          show($("notice"), true);
+          show($("answer"), false);
+          return;
+        }
+        citations = {};
+        res.body.citations.forEach(function (c) { citations[c.chunk_id] = c; });
+        if (res.body.answer === null) {
+          $("notice").textContent = "Answer generation is not configured on this deployment. Retrieval results are shown below.";
+          show($("notice"), true);
+          show($("answer"), false);
+        } else {
+          renderAnswer(res.body.answer);
+          show($("answer"), true);
+        }
+        renderScores(res.body.scores);
+      })
+      .catch(function () {
+        $("notice").textContent = "Network error.";
+        show($("notice"), true);
+      })
+      .then(function () { btn.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>
