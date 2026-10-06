@@ -55,6 +55,22 @@ Scorer = Callable[[list[dict[str, Any]]], dict[str, list[float]]]
 # --- data and labels -------------------------------------------------------------
 
 
+def sample_records(records: list[dict[str, Any]], n: int | None) -> list[dict[str, Any]]:
+    """First ``n`` records taken round-robin across categories, so a small live run
+    still covers every category. ``None`` returns all records."""
+    if n is None or n >= len(records):
+        return records
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for rec in records:
+        buckets.setdefault(rec["category"], []).append(rec)
+    picked: list[dict[str, Any]] = []
+    while len(picked) < n:
+        for bucket in buckets.values():
+            if bucket and len(picked) < n:
+                picked.append(bucket.pop(0))
+    return picked
+
+
 def load_golden(path: Path) -> list[dict[str, Any]]:
     with path.open(encoding="utf-8") as fh:
         return [json.loads(line) for line in fh if line.strip()]
@@ -427,6 +443,9 @@ def main(argv: list[str] | None = None) -> int:
         "--model", default=os.environ.get("GENERATION_MODEL", "anthropic/claude-haiku-4.5")
     )
     ap.add_argument("--judge-model", default="anthropic/claude-haiku-4.5")
+    ap.add_argument(
+        "--limit", type=int, help="live run only: use N questions, spread across categories"
+    )
     ap.add_argument("--cap-usd", type=float, default=5.0)
     ap.add_argument("--ledger", type=Path, default=Path(".traces/spend.json"))
     ap.add_argument("--out", type=Path)
@@ -470,13 +489,14 @@ def main(argv: list[str] | None = None) -> int:
         from src.trace import make_tracer
 
         configs = args.gen_configs.split(",")
+        live_records = sample_records(records, args.limit)
         projected = estimate_live_cost(
-            len(records), len(configs), args.k, args.model, args.judge_model
+            len(live_records), len(configs), args.k, args.model, args.judge_model
         )
         print(f"projected live cost ${projected:.2f}; remaining ${ledger.remaining_usd:.2f}")
         tracer = make_tracer(os.environ)
         generation = run_live(
-            records,
+            live_records,
             backend,
             reranker,
             args.k,

@@ -202,3 +202,12 @@ def test_ragas_spend_callback_records(tmp_path: Path) -> None:
     )
     cb.on_llm_end(resp)
     assert ledger.total_usd > 0 and ledger.entries[0]["label"] == "ragas_judge"
+
+
+def test_sample_records_spreads_across_categories() -> None:
+    recs = [{"id": f"{c}{i}", "category": c} for c in "abc" for i in range(4)]
+    picked = ev.sample_records(recs, 5)
+    assert len(picked) == 5
+    assert {r["category"] for r in picked} == {"a", "b", "c"}
+    assert ev.sample_records(recs, None) is recs
+    assert ev.sample_records(recs, 99) is recs
