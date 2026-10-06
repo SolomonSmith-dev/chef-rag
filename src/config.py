@@ -43,6 +43,13 @@ class RetrievalSettings(BaseSettings):
     chunks_path: str = "data/processed/chunks.jsonl"
     fuse_top_n: int = 10
     final_top_k: int = 5
+    # Refuse when the best rerank score is below this. bge-reranker-base emits raw logits;
+    # 0.0 is the sigmoid-0.5 point and is NOT calibrated: use gate_sweep in the eval JSON.
+    min_rerank_score: float = 0.0
+    generation_model: str = "anthropic/claude-sonnet-4"
+    trace_dir: str = ".traces"
+    spend_ledger: str = ".traces/spend.json"
+    spend_cap_usd: float = 5.0
 
 
 def load_retrieval_settings() -> RetrievalSettings:

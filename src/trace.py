@@ -192,7 +192,7 @@ class LangfuseTracer(Tracer):
 
 def make_tracer(
     env: Mapping[str, str],
-    trace_dir: Path = Path(".traces"),
+    trace_dir: Path | None = None,
     redact_input: bool = False,
     langfuse_factory: Callable[[], Any] | None = None,
 ) -> Tracer:
@@ -210,4 +210,6 @@ def make_tracer(
                 )
 
         return LangfuseTracer(langfuse_factory(), redact_input=redact_input)
-    return JsonlTracer(trace_dir, redact_input=redact_input)
+    return JsonlTracer(
+        trace_dir or Path(env.get("TRACE_DIR", ".traces")), redact_input=redact_input
+    )

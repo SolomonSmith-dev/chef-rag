@@ -17,6 +17,7 @@ from src.retrieval import (
     SentenceTransformerEmbedder,
     SupabaseBackend,
 )
+from src.trace import Tracer
 
 
 def build_embedder(name: str, cfg: RetrievalSettings) -> Embedder:
@@ -62,7 +63,16 @@ def retrieve(
     cfg: RetrievalSettings,
     mode: Mode = "hybrid",
     k: int | None = None,
+    tracer: Tracer | None = None,
 ) -> tuple[list[Hit], list[Hit]]:
-    """Return (candidates before rerank, final top-k)."""
-    candidates = backend.search(query, mode=mode, limit=cfg.fuse_top_n)
-    return candidates, reranker.rerank(query, candidates, k or cfg.final_top_k)
+    """Return (candidates before rerank, final top-k). Emits spans when a tracer is given."""
+    if tracer is None:
+        candidates = backend.search(query, mode=mode, limit=cfg.fuse_top_n)
+        return candidates, reranker.rerank(query, candidates, k or cfg.final_top_k)
+    with tracer.span("retrieve", input={"query": query}, metadata={"mode": mode}) as span:
+        candidates = backend.search(query, mode=mode, limit=cfg.fuse_top_n)
+        span.update(output=[h.chunk_id for h in candidates])
+    with tracer.span("rerank", metadata={"reranker": type(reranker).__name__}) as span:
+        final = reranker.rerank(query, candidates, k or cfg.final_top_k)
+        span.update(output=[h.chunk_id for h in final])
+    return candidates, final

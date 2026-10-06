@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+from pathlib import Path
 
 from src import __version__
+from src.config import RetrievalSettings
+from src.retrieval import Hit
+from src.trace import Tracer
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,13 +50,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     query_parser.add_argument("--k", type=int, default=5, help="results after rerank")
     query_parser.add_argument("--show-scores", action="store_true")
+    query_parser.add_argument(
+        "--answer",
+        action="store_true",
+        help="generate a cited answer via OpenRouter (spends money)",
+    )
 
     return parser
 
 
 def _ingest(source: str, out: str, tokenizer: str, index: bool, embedder: str) -> int:
-    from pathlib import Path
-
     from src.ingest import TiktokenTokenizer, WordTokenizer, ingest_directory
 
     if not Path(source).is_dir():
@@ -78,16 +86,31 @@ def _ingest(source: str, out: str, tokenizer: str, index: bool, embedder: str) -
 def _query(args: argparse.Namespace) -> int:
     from src.config import load_retrieval_settings
     from src.pipeline import build_backend, build_embedder, build_reranker, retrieve
+    from src.trace import make_tracer
 
     cfg = load_retrieval_settings()
+    tracer = make_tracer(os.environ)
     try:
         backend = build_backend(args.backend, cfg, build_embedder(args.embedder, cfg))
     except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc} (run `chef-rag ingest --index` first?)", file=sys.stderr)
         return 2
-    candidates, hits = retrieve(
-        args.question, backend, build_reranker(args.reranker, cfg), cfg, args.mode, args.k
-    )
+    with tracer.span("query", input={"question": args.question}) as root:
+        candidates, hits = retrieve(
+            args.question,
+            backend,
+            build_reranker(args.reranker, cfg),
+            cfg,
+            args.mode,
+            args.k,
+            tracer,
+        )
+        root.update(output=[h.chunk_id for h in hits])
+        if args.answer:
+            code = _answer(args.question, hits, cfg, tracer)
+            tracer.flush()
+            return code
+    tracer.flush()
     if not hits:
         print("no results")
         return 1
@@ -101,6 +124,31 @@ def _query(args: argparse.Namespace) -> int:
         print(f"    {h.text[:300].strip()}")
     if args.show_scores:
         print(f"candidates before rerank: {len(candidates)}")
+    return 0
+
+
+def _answer(question: str, hits: list[Hit], cfg: RetrievalSettings, tracer: Tracer) -> int:
+    from src.budget import BudgetExceeded, SpendLedger
+    from src.generate import CitationError, OpenRouterClient, answer_question
+
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        print("error: OPENROUTER_API_KEY not set", file=sys.stderr)
+        return 2
+    ledger = SpendLedger(Path(cfg.spend_ledger), cfg.spend_cap_usd)
+    client = OpenRouterClient(key, ledger)
+    try:
+        ans = answer_question(
+            question, hits, client, cfg.generation_model, cfg.min_rerank_score, tracer
+        )
+    except (CitationError, BudgetExceeded) as exc:
+        print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 3
+    print(ans.text)
+    print(
+        f"[refused={ans.refused} cost=${ans.cost:.4f} "
+        f"tokens={ans.prompt_tokens}+{ans.completion_tokens}]"
+    )
     return 0
 
 

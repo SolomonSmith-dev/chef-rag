@@ -104,11 +104,34 @@ Never dense-only. BM25-only is acceptable for debugging only.
 
 Prompt structure:
 
-1. System: answer only from provided context; cite chunk IDs
-2. User: question + top-k reranked chunks
-3. Output: answer text + list of `chunk_id` citations
+1. System: answer only from provided context; cite every claim as `[cite: <chunk_id>]`;
+   reply exactly `NOT_IN_SOURCES` when the passages do not answer; when a `gutenberg`
+   source conflicts with `fda`/`usda` on safety, temperature or time, follow `fda`/`usda`
+   and say the older text differs.
+2. User: question + top-k reranked chunks, each labeled with chunk_id and source_type.
+3. Output: answer text with inline `[cite: ...]` markers.
 
-All LLM calls go through OpenRouter (`openai` client with custom base URL).
+Enforcement in `src/generate.py`:
+
+- A citation not in the retrieved set raises `InvalidCitationError` (hard error).
+- An answer with no citation raises `MissingCitationError`.
+- Refusal ("Not in my sources") when retrieval is empty, when the best rerank score is
+  below `MIN_RERANK_SCORE` (checked before any LLM call), or when the model returns
+  `NOT_IN_SOURCES`. The default threshold 0.0 is uncalibrated; the eval JSON includes a
+  `gate_sweep` of refusal precision/recall per threshold to choose it.
+
+All LLM calls go through OpenRouter (`openai` client with custom base URL) and through
+`SpendLedger` (`src/budget.py`), which enforces the USD cap before each call.
+
+## Tracing
+
+`src/trace.py` `make_tracer` picks Langfuse when `LANGFUSE_PUBLIC_KEY` and
+`LANGFUSE_SECRET_KEY` are set, otherwise a local JSONL tracer writing to `.traces/`
+(gitignored, override with `TRACE_DIR`). The CLI and generation path always go through
+a tracer: spans `query`, `retrieve`, `rerank`, `answer`, `generate` (kind generation,
+with model, token usage and cost). `redact_input=True` drops inputs and outputs (used by
+the public demo). Ragas judge calls run under the eval harness, are recorded in the
+spend ledger via a callback, and use estimated (not reported) cost.
 
 ## Eval contract
 
@@ -116,15 +139,39 @@ Golden pairs live in `evals/golden.jsonl`. Each line:
 
 ```json
 {
-  "id": "safety-001",
+  "id": "safety-004",
   "category": "safety",
   "question": "...",
   "reference_answer": "...",
-  "tags": ["temperature", "fda"]
+  "tags": ["cold-holding", "fda"],
+  "answerable": true,
+  "sources": ["fda"],
+  "evidence": ["\\b41\\s*\u00b0?\\s*F\\b"],
+  "needs_review": true
 }
 ```
 
-`evals/run_evals.py` runs Ragas metrics (faithfulness, answer relevancy, context precision) against the live pipeline. Baseline scores recorded in `ROADMAP.md`.
+Categories: `technique`, `safety`, `management`, `precision` (ratios and temperatures),
+`outdated` (old text conflicts with modern guidance; the right answer prefers fda/usda),
+`out_of_corpus` (`answerable: false`; the right behavior is refusal).
+
+Relevant chunks are resolved at run time: a chunk is relevant when its `source_path`
+starts with one of `sources` (or `original` matches `source_type`) and its text matches
+an `evidence` regex. Questions with no matching chunk are reported as `unresolved` and
+excluded from retrieval metrics. `needs_review: true` marks items drafted by tooling;
+`labels_need_review` marks the author's original items whose labels were drafted.
+
+`evals/run_evals.py` reports:
+
+- Retrieval, for bm25 / dense / hybrid / hybrid+rerank: recall@10 (before rerank),
+  recall@k (after), MRR. Recall@N = |relevant in top N| / min(|relevant|, N).
+- Live (`--live`): Ragas faithfulness, answer relevancy, context precision; refusal
+  precision and recall; citation validity rate; modern-source rate on `outdated`
+  questions; p50/p95 latency; cost per query; spend.
+- A run with the hashing embedder or no reranker is marked `smoke: true` and written to
+  `<date>-smoke.json`; it is never a quality result.
+
+Baseline scores are recorded in `ROADMAP.md` from `evals/results/<date>.json`.
 
 ## Environment
 
