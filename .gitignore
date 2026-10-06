@@ -40,3 +40,6 @@ data/processed/
 # Coverage
 .coverage
 htmlcov/
+
+# Traces (local fallback when Langfuse keys are absent)
+.traces/
