@@ -1,0 +1,13 @@
+---
+title: FDA Food Code (fixture excerpt)
+source_type: fda
+---
+FDA FOOD CODE (FIXTURE EXCERPT)
+
+3-501.16 Time/Temperature Control for Safety Food, Hot and Cold Holding.
+
+Time/temperature control for safety food shall be maintained at 135 degrees F or above, or at 41 degrees F or less. The danger zone is the range between 41 degrees F and 135 degrees F, where bacteria multiply fastest.
+
+3-401.11 Cooking Raw Animal Foods.
+
+Poultry must be cooked to an internal temperature of 165 degrees F for 15 seconds. Ground beef must reach 155 degrees F for 17 seconds. Whole muscle beef steaks must reach 145 degrees F for 15 seconds.
